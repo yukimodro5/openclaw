@@ -144,12 +144,6 @@ export function createFollowupRunner(params: {
       upstreamAbortSignal: opts?.abortSignal,
     });
     try {
-      console.log(
-        "[auto-trace] followup-runner ENTERED: messageId:",
-        queued.messageId,
-        "prompt:",
-        queued.prompt?.substring(0, 60),
-      );
       const runId = crypto.randomUUID();
       const shouldSurfaceToControlUi = isInternalMessageChannel(
         resolveOriginMessageProvider({
@@ -348,25 +342,16 @@ export function createFollowupRunner(params: {
       // Followup runs are always queued work — "auto" resolves to "first" (quote the triggering message).
       const replyToMode = rawReplyToMode === "auto" ? "first" : rawReplyToMode;
 
-      console.log(
-        "[auto-trace] followup-runner: rawMode:",
-        rawReplyToMode,
-        "resolved:",
-        replyToMode,
-        "messageId:",
-        queued.messageId,
-      );
-      // When "auto" resolved to "first", clear explicit replyToCurrent: false
-      // so the implicit messageId-based replyToId can be stamped by applyReplyThreading.
-      // The model sets replyToCurrent: false when it doesn't use [[reply_to_current]] tags,
-      // but for auto-quoting of queued messages we want implicit quoting regardless.
+      // When "auto" resolved to "first", inject replyToId + replyToCurrent
+      // on every payload — same as if the model had used [[reply_to_current]].
+      // The "first" mode filter then naturally keeps it on the first payload only.
       const threadingPayloads =
-        replyToMode === "first" && rawReplyToMode === "auto"
-          ? nonReasoningPayloads.map((p) =>
-              (p as { replyToCurrent?: boolean }).replyToCurrent === false
-                ? { ...p, replyToCurrent: undefined }
-                : p,
-            )
+        replyToMode === "first" && rawReplyToMode === "auto" && queued.messageId
+          ? nonReasoningPayloads.map((p) => ({
+              ...p,
+              replyToId: queued.messageId,
+              replyToCurrent: true,
+            }))
           : nonReasoningPayloads;
       const replyTaggedPayloads: ReplyPayload[] = applyReplyThreading({
         payloads: threadingPayloads,
@@ -374,13 +359,6 @@ export function createFollowupRunner(params: {
         replyToChannel,
         currentMessageId: queued.messageId,
       });
-      console.log(
-        "[auto-trace] followup-runner payloads:",
-        replyTaggedPayloads.map((p) => ({
-          replyToId: p.replyToId,
-          text: p.text?.substring(0, 40),
-        })),
-      );
       const dedupedPayloads = filterMessagingToolDuplicates({
         payloads: replyTaggedPayloads,
         sentTexts: runResult.messagingToolSentTexts ?? [],
