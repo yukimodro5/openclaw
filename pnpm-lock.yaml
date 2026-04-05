@@ -738,7 +738,11 @@ importers:
         specifier: workspace:*
         version: link:../..
 
-  extensions/xai: {}
+  extensions/xai:
+    devDependencies:
+      '@openclaw/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../packages/plugin-sdk
 
   extensions/xiaomi: {}
 
@@ -782,6 +786,8 @@ importers:
         version: link:../..
 
   packages/plugin-package-contract: {}
+
+  packages/plugin-sdk: {}
 
   ui:
     dependencies:
