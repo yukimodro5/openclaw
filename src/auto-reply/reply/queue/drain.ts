@@ -123,11 +123,21 @@ export function scheduleFollowupDrain(
 
           const routing = resolveOriginRoutingMetadata(items);
 
+          // Detect multi-sender batches and enrich prompt with per-item reply tags
+          // so the model can produce separate quoted replies for each sender.
+          const senderIds = new Set(items.map((i) => i.run.senderId).filter(Boolean));
+          const isMultiSender = senderIds.size > 1;
           const prompt = buildCollectPrompt({
-            title: "[Queued messages while agent was busy]",
+            title: isMultiSender
+              ? `[Queued messages while agent was busy — ${items.length} messages from ${senderIds.size} senders]\nUse [[reply_to:<message_id>]] before each section of your reply to quote the message you are answering.`
+              : "[Queued messages while agent was busy]",
             items,
             summary,
-            renderItem: (item, idx) => `---\nQueued #${idx + 1}\n${item.prompt}`.trim(),
+            renderItem: (item, idx) => {
+              const tagHint =
+                isMultiSender && item.messageId ? ` (message_id: ${item.messageId})` : "";
+              return `---\nQueued #${idx + 1}${tagHint}\n${item.prompt}`.trim();
+            },
           });
           console.log(
             "[auto-trace] drain collect: messageId:",
